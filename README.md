@@ -118,7 +118,7 @@ This yaml will be translated in the resulting `.tex` file like the following:
 
 ### cv entries
 
-#### Entry with two fields - cvitem (not yet implemented)
+#### Entry with two fields - cvitem
 
 A bulleted list item, starting with a bold font weight will be replaced with `\cvitem{}{}`:
 
