@@ -1,41 +1,12 @@
 """
 Pandoc filter using panflute to create a cv using moderncv LaTeX package
 from markdown.
+
+Usage: pandoc  cv_panflute.md -s -o cv_panflute.tex --filter mderncv/source/mderncv.py
 """
 
 import sys
 import panflute as pf
-
-"""
-
-"""
-
-DATE_SEP = "_"
-SPLIT_TITLE = True
-
-
-def split_cv_line(txt):
-    """Return a tuple of the side bar text and title
-
-    e.g.
-    input:  "*Gen 2000 -- Dec 2020* Example GmbH -- Intern"
-    output: ("Gen 2000 -- Dec 2020", "Example GmbH -- Intern")
-    """
-
-    content = []
-
-    if DATE_SEP not in txt:
-        return "", txt
-
-    txt = txt.split(DATE_SEP, 1)[1]
-    txt = txt.split(DATE_SEP)
-    content.append(txt[0].strip())
-    title = txt[1].strip()
-    if SPLIT_TITLE and "--" in title:
-        content.extend(title.split("--"))
-    else:
-        content.append(title)
-    return content
 
 
 class CV:
@@ -76,19 +47,9 @@ class CVItem(CV):
         self.nb_par = 3
         print(content, file=sys.stderr)
         plain = content.list[0]
-        # key = plain.content.pop(0)
-        # print(content, file=sys.stderr)
-        # self.content = [key, plain]
-        # Concatenate all the extra content that doesn't fit in a item
-        # nb_elt = len(self.content)
-        # if nb_elt > self.nb_par:
-        #     plain = self.content.list[1:]
-        #     key = self.content.list[0]
-        #     self.content = [key, plain]
 
 
 def personal_data_to_tex(doc: pf.Doc):
-    # c = doc.content
     c = []
     c.append(
         pf.RawBlock(
@@ -178,8 +139,6 @@ def action(elem: pf.Element, doc: pf.Doc):
     elif isinstance(elem, pf.BulletList) and doc.format == "latex":
         div = pf.Div()
         for item in elem.content.list:
-            # demo = CVItem(item.content).to_tex()
-            # raw_inline = pf.RawInline(demo, format="latex")
             plain = item.content.list[0]
             key = ""
             if isinstance(plain.content[0], pf.Emph):
@@ -196,8 +155,6 @@ def action(elem: pf.Element, doc: pf.Doc):
 
 
 def finalize(doc):
-    # if doc.format == "latex":
-    # personal_data_to_tex(doc)
     pass
 
 
@@ -206,5 +163,4 @@ def main(doc=None):
 
 
 if __name__ == "__main__":
-    # main()
     pf.toJSONFilter(action, prepare=prepare, finalize=finalize)
