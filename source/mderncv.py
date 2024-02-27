@@ -45,7 +45,6 @@ class CVItem(CV):
     def __init__(self, content):
         self._type = "cvitem"
         self.nb_par = 3
-        print(content, file=sys.stderr)
         plain = content.list[0]
 
 
@@ -125,32 +124,41 @@ def prepare(doc):
 
 
 def action(elem: pf.Element, doc: pf.Doc):
-    if isinstance(elem, pf.MetaInlines) and elem.content[0].text == "$perso":
+    if isinstance(elem, pf.MetaInlines) and hasattr( elem.content[0], 'text') and elem.content[0].text == "$perso":
         pf.debug(elem.parent)
         c = personal_data_to_tex(elem.doc)
         return pf.MetaBlocks(*c)
     if isinstance(elem, pf.Math) and doc.format == "latex":
         return pf.RawInline(f"\\({elem.text}\\)", "markdown")
     if isinstance(elem, pf.Header) and doc.format == "latex":
-        if elem.level == 3:
+        if elem.level >= 2:
             demo = CVEntry(elem.content).to_tex()
             block = pf.RawBlock(demo, format="latex")
             return block
     elif isinstance(elem, pf.BulletList) and doc.format == "latex":
         div = pf.Div()
+        pf.debug(elem)
         for item in elem.content.list:
             plain = item.content.list[0]
             key = ""
             if isinstance(plain.content[0], pf.Emph):
                 key = pf.stringify(plain.content.pop(0))
-            cv_line_tex = "\cvitem{%s}{%s}{}" % (
+            cv_line_tex = "\cvitem{%s}{$\circ$ %s}{}" % (
                 key,
                 pf.stringify(plain),
             )
             if "&" in cv_line_tex:
                 cv_line_tex = cv_line_tex.replace("&", "\&")
             raw_inline = pf.RawInline(cv_line_tex, format="latex")
-            div.content.extend([pf.Plain(raw_inline)])
+            all_list = [pf.Plain(raw_inline)]
+            # for sub in elem.content.list[1:]:
+            #     cv_line_tex = "\cvitem{}{\hspace{\parindent} - %s}{}" % (
+            #         pf.stringify(sub.content.list[0]),
+            #     )
+            #     all_list.append(pf.RawBlock(cv_line_tex, "latex"))
+            #     # pf.debug(all_list)
+                
+            div.content.extend(all_list)
         return div
 
 
