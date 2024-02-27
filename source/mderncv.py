@@ -3,37 +3,208 @@ Pandoc filter using panflute to create a cv using moderncv LaTeX package
 from markdown.
 """
 
+import sys
 import panflute as pf
 
 """
 
 """
+
+DATE_SEP = "_"
+SPLIT_TITLE = True
+
+
+def split_cv_line(txt):
+    """Return a tuple of the side bar text and title
+
+    e.g.
+    input:  "*Gen 2000 -- Dec 2020* Example GmbH -- Intern"
+    output: ("Gen 2000 -- Dec 2020", "Example GmbH -- Intern")
+    """
+
+    content = []
+
+    if DATE_SEP not in txt:
+        return "", txt
+
+    txt = txt.split(DATE_SEP, 1)[1]
+    txt = txt.split(DATE_SEP)
+    content.append(txt[0].strip())
+    title = txt[1].strip()
+    if SPLIT_TITLE and "--" in title:
+        content.extend(title.split("--"))
+    else:
+        content.append(title)
+    return content
+
+
+class CV:
+    nb_par = 0
+    _type = None
+
+    def __init__(self, content):
+        self.content = content
+
+    def to_tex(self):
+        # generate cventry arguments based on  number of elements
+        nb_elt = len(self.content)
+        skip = 0
+        start = ""
+        if not isinstance(self.content[0], pf.Emph):
+            start = "{{}}"
+            skip = 1
+        start = start + "{{{}}}" * (nb_elt - skip)
+        end = "{{}}" * (self.nb_par - nb_elt - skip)
+        entry = f"\\{self._type}{start}{end}"
+        result = entry.format(*map(pf.stringify, self.content))
+        if "&" in result:
+            result = result.replace("&", "\\&")
+        return result
+
+
+class CVEntry(CV):
+    def __init__(self, content):
+        self._type = "cventry"
+        self.nb_par = 6
+        super().__init__(content)
+        self.content = [x for x in content.list if not isinstance(x, pf.Space)]
+
+
+class CVItem(CV):
+    def __init__(self, content):
+        self._type = "cvitem"
+        self.nb_par = 3
+        print(content, file=sys.stderr)
+        plain = content.list[0]
+        # key = plain.content.pop(0)
+        # print(content, file=sys.stderr)
+        # self.content = [key, plain]
+        # Concatenate all the extra content that doesn't fit in a item
+        # nb_elt = len(self.content)
+        # if nb_elt > self.nb_par:
+        #     plain = self.content.list[1:]
+        #     key = self.content.list[0]
+        #     self.content = [key, plain]
+
+
+def personal_data_to_tex(doc: pf.Doc):
+    # c = doc.content
+    c = []
+    c.append(
+        pf.RawBlock(
+            "\\lastname {{{}}}".format(doc.get_metadata("lastname")),
+            format="latex",
+        )
+    )
+    c.append(
+        pf.RawBlock(
+            "\\firstname {{{}}}".format(doc.get_metadata("firstname")),
+            format="latex",
+        )
+    )
+    c.append(
+        pf.RawBlock(
+            "\\name {{{}}}{{{}}}".format(
+                doc.get_metadata("firstname"), doc.get_metadata("lastname")
+            ),
+            format="latex",
+        )
+    )
+    c.append(
+        pf.RawBlock(
+            "\\name {{{}}}{{{}}}".format(
+                doc.get_metadata("firstname"), doc.get_metadata("lastname")
+            ),
+            format="latex",
+        )
+    )
+    if doc.get_metadata("title") is not None:
+        c.append(
+            pf.RawBlock("\\title{{{}}}".format(doc.get_metadata("title")), "latex")
+        )
+    if doc.get_metadata("photo") is not None:
+        c.append(
+            pf.RawBlock(
+                "\\photo[80pt][0pt]{{{}}}".format(doc.get_metadata("photo")), "latex"
+            )
+        )
+    if doc.get_metadata("email") is not None:
+        c.append(
+            pf.RawBlock("\\email{{{}}}".format(doc.get_metadata("email")), "latex")
+        )
+    if doc.get_metadata("homepage") is not None:
+        c.append(
+            pf.RawBlock(
+                "\\homepage{{{}}}".format(doc.get_metadata("homepage")), "latex"
+            )
+        )
+    if doc.get_metadata("linkedin") is not None:
+        c.append(
+            pf.RawBlock(
+                "\\social[linkedin]{{{}}}".format(doc.get_metadata("linkedin")), "latex"
+            )
+        )
+    if doc.get_metadata("github") is not None:
+        c.append(
+            pf.RawBlock(
+                "\\social[github]{{{}}}".format(doc.get_metadata("github")), "latex"
+            )
+        )
+    if doc.get_metadata("gitlab") is not None:
+        c.append(
+            pf.RawBlock(
+                "\\social[gitlab]{{{}}}".format(doc.get_metadata("gitlab")), "latex"
+            )
+        )
+    return c
+
+
 def prepare(doc):
     pass
 
-def action(elem, doc):
-    if isinstance(elem, pf.BulletList) and doc.format == 'latex':
+
+def action(elem: pf.Element, doc: pf.Doc):
+    if isinstance(elem, pf.MetaInlines) and elem.content[0].text == "$perso":
+        pf.debug(elem.parent)
+        c = personal_data_to_tex(elem.doc)
+        return pf.MetaBlocks(*c)
+    if isinstance(elem, pf.Math) and doc.format == "latex":
+        return pf.RawInline(f"\\({elem.text}\\)", "markdown")
+    if isinstance(elem, pf.Header) and doc.format == "latex":
+        if elem.level == 3:
+            demo = CVEntry(elem.content).to_tex()
+            block = pf.RawBlock(demo, format="latex")
+            return block
+    elif isinstance(elem, pf.BulletList) and doc.format == "latex":
         div = pf.Div()
         for item in elem.content.list:
+            # demo = CVItem(item.content).to_tex()
+            # raw_inline = pf.RawInline(demo, format="latex")
             plain = item.content.list[0]
-            key = plain.content.pop(0)
+            key = ""
+            if isinstance(plain.content[0], pf.Emph):
+                key = pf.stringify(plain.content.pop(0))
             cv_line_tex = "\cvitem{%s}{%s}{}" % (
-                pf.stringify(key), pf.stringify(plain))
-            raw_inline = pf.RawInline(cv_line_tex, format='latex')
+                key,
+                pf.stringify(plain),
+            )
+            if "&" in cv_line_tex:
+                cv_line_tex = cv_line_tex.replace("&", "\&")
+            raw_inline = pf.RawInline(cv_line_tex, format="latex")
             div.content.extend([pf.Plain(raw_inline)])
         return div
 
 
 def finalize(doc):
+    # if doc.format == "latex":
+    # personal_data_to_tex(doc)
     pass
 
 
 def main(doc=None):
-    return pf.run_filter(action,
-                         prepare=prepare,
-                         finalize=finalize,
-                         doc=doc)
+    return pf.run_filter(action, prepare=prepare, finalize=finalize, doc=doc)
 
 
-if __name__ == '__main__':
-    main()
+if __name__ == "__main__":
+    # main()
+    pf.toJSONFilter(action, prepare=prepare, finalize=finalize)
